@@ -1,28 +1,29 @@
 # -*- coding: utf-8 -*-
 '''Main tldextract unit tests.'''
 
-import sys
+import logging
+import os
+import tempfile
 
+import pytest
 import responses
 import tldextract
-from .helpers import temporary_file
-if sys.version_info >= (3,):  # pragma: no cover
-    unicode = str  # pylint: disable=invalid-name,redefined-builtin
+from tldextract.cache import DiskCache
+from tldextract.suffix_list import SuffixListNotFound
+from tldextract.tldextract import ExtractResult
 
 
-# pylint: disable=invalid-name
-extract = tldextract.TLDExtract(cache_file=temporary_file())
-extract_no_cache = tldextract.TLDExtract(cache_file=False)
-extract_using_real_local_suffix_list = tldextract.TLDExtract(cache_file=temporary_file())
-extract_using_real_local_suffix_list_no_cache = tldextract.TLDExtract(cache_file=False)
+extract = tldextract.TLDExtract(cache_dir=tempfile.mkdtemp())
+extract_no_cache = tldextract.TLDExtract(cache_dir=False)
+extract_using_real_local_suffix_list = tldextract.TLDExtract(cache_dir=tempfile.mkdtemp())
+extract_using_real_local_suffix_list_no_cache = tldextract.TLDExtract(cache_dir=False)
 extract_using_fallback_to_snapshot_no_cache = tldextract.TLDExtract(
-    cache_file=None,
+    cache_dir=None,
     suffix_list_urls=None
 )
-# pylint: enable=invalid-name
 
 
-def assert_extract(
+def assert_extract(  # pylint: disable=missing-docstring
         url,
         expected_domain_data,
         expected_ip_data='',
@@ -71,6 +72,11 @@ def test_odd_but_possible():
     assert_extract('http://www.com', ('www.com', '', 'www', 'com'))
 
 
+def test_suffix():
+    assert_extract('com', ('', '', '', 'com'))
+    assert_extract('co.uk', ('', '', '', 'co.uk'))
+
+
 def test_local_host():
     assert_extract('http://internalunlikelyhostname/',
                    ('', '', 'internalunlikelyhostname', ''))
@@ -102,6 +108,10 @@ def test_looks_like_ip():
 def test_punycode():
     assert_extract('http://xn--h1alffa9f.xn--p1ai',
                    ('xn--h1alffa9f.xn--p1ai', '', 'xn--h1alffa9f', 'xn--p1ai'))
+    assert_extract('http://xN--h1alffa9f.xn--p1ai',
+                   ('xN--h1alffa9f.xn--p1ai', '', 'xN--h1alffa9f', 'xn--p1ai'))
+    assert_extract('http://XN--h1alffa9f.xn--p1ai',
+                   ('XN--h1alffa9f.xn--p1ai', '', 'XN--h1alffa9f', 'xn--p1ai'))
     # Entries that might generate UnicodeError exception
     # This subdomain generates UnicodeError 'IDNA does not round-trip'
     assert_extract('xn--tub-1m9d15sfkkhsifsbqygyujjrw602gk4li5qqk98aca0w.google.com',
@@ -118,6 +128,9 @@ def test_invalid_puny_with_puny():
     assert_extract('http://xn--zckzap6140b352by.blog.so-net.xn--wcvs22d.hk',
                    ('xn--zckzap6140b352by.blog.so-net.xn--wcvs22d.hk',
                     'xn--zckzap6140b352by.blog', 'so-net', 'xn--wcvs22d.hk'))
+    assert_extract('http://xn--&.so-net.com',
+                   ('xn--&.so-net.com',
+                    'xn--&', 'so-net', 'com'))
 
 
 def test_puny_with_non_puny():
@@ -223,13 +236,62 @@ def test_result_as_dict():
     assert result._asdict() == expected_dict
 
 
-@responses.activate  # pylint: disable=no-member
-def test_cache_timeouts():
+def test_cache_permission(mocker, monkeypatch, tmpdir):
+    """Emit a warning once that this can't cache the latest PSL."""
+
+    warning = mocker.patch.object(logging.getLogger("tldextract.cache"), "warning")
+
+    def no_permission_makedirs(*args, **kwargs):
+        raise PermissionError(
+            """[Errno 13] Permission denied:
+            '/usr/local/lib/python3.7/site-packages/tldextract/.suffix_cache"""
+        )
+
+    monkeypatch.setattr(os, "makedirs", no_permission_makedirs)
+
+    for _ in range(0, 2):
+        my_extract = tldextract.TLDExtract(cache_dir=tmpdir)
+        assert_extract(
+            "http://www.google.com",
+            ("www.google.com", "www", "google", "com"),
+            funs=(my_extract,),
+        )
+
+    assert warning.call_count == 1
+    assert warning.call_args[0][0].startswith("unable to cache")
+
+
+@responses.activate
+def test_cache_timeouts(tmpdir):
     server = 'http://some-server.com'
-    responses.add(  # pylint: disable=no-member
-        responses.GET,  # pylint: disable=no-member
+    responses.add(
+        responses.GET,
         server,
         status=408
     )
+    cache = DiskCache(tmpdir)
 
-    assert tldextract.remote.find_first_response([server], 5) == unicode('')
+    with pytest.raises(SuffixListNotFound):
+        tldextract.suffix_list.find_first_response(cache, [server], 5)
+
+
+def test_tlds_property():
+    extract_private = tldextract.TLDExtract(
+        cache_dir=None,
+        suffix_list_urls=None,
+        include_psl_private_domains=True
+    )
+    extract_public = tldextract.TLDExtract(
+        cache_dir=None,
+        suffix_list_urls=None,
+        include_psl_private_domains=False
+    )
+    assert len(extract_private.tlds) > len(extract_public.tlds)
+
+
+def test_global_extract():
+    assert tldextract.extract("foo.blogspot.com") == ExtractResult(
+        subdomain="foo", domain="blogspot", suffix="com"
+    )
+    assert tldextract.extract("foo.blogspot.com", include_psl_private_domains=True) == \
+           ExtractResult(subdomain='', domain='foo', suffix='blogspot.com')

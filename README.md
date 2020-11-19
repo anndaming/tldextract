@@ -1,6 +1,6 @@
 # tldextract
 
-## Python Module [![PyPI version](https://badge.fury.io/py/tldextract.svg)](https://badge.fury.io/py/tldextract) [![Build Status](https://travis-ci.org/john-kurkowski/tldextract.svg?branch=master)](https://travis-ci.org/john-kurkowski/tldextract)
+## Python Module [![PyPI version](https://badge.fury.io/py/tldextract.svg)](https://badge.fury.io/py/tldextract) [![Build Status](https://travis-ci.com/john-kurkowski/tldextract.svg?branch=master)](https://travis-ci.com/john-kurkowski/tldextract)
 
 `tldextract` accurately separates the gTLD or ccTLD (generic or country code
 top-level domain) from the registered domain and subdomains of a URL. For
@@ -105,16 +105,14 @@ tldextract http://forums.bbc.co.uk
 ### Note About Caching
 
 Beware when first running the module, it updates its TLD list with a live HTTP
-request. This updated TLD set is cached indefinitely in
-`/path/to/tldextract/.tld_set`.
+request. This updated TLD set is usually cached indefinitely in ``$HOME/.cache/python-tldextract`.
+To control the cache's location, set TLDEXTRACT_CACHE environment variable or set the
+cache_dir path in TLDExtract initialization.
 
 (Arguably runtime bootstrapping like that shouldn't be the default behavior,
 like for production systems. But I want you to have the latest TLDs, especially
 when I haven't kept this code up to date.)
 
-To avoid this fetch or control the cache's location, use your own extract
-callable by setting TLDEXTRACT_CACHE environment variable or by setting the
-cache_file path in TLDExtract initialization.
 
 ```python
 # extract callable that falls back to the included TLD snapshot, no live HTTP fetching
@@ -122,11 +120,11 @@ no_fetch_extract = tldextract.TLDExtract(suffix_list_urls=None)
 no_fetch_extract('http://www.google.com')
 
 # extract callable that reads/writes the updated TLD set to a different path
-custom_cache_extract = tldextract.TLDExtract(cache_file='/path/to/your/cache/file')
+custom_cache_extract = tldextract.TLDExtract(cache_dir='/path/to/your/cache/')
 custom_cache_extract('http://www.google.com')
 
 # extract callable that doesn't use caching
-no_cache_extract = tldextract.TLDExtract(cache_file=False)
+no_cache_extract = tldextract.TLDExtract(cache_dir=False)
 no_cache_extract('http://www.google.com')
 ```
 
@@ -167,10 +165,15 @@ ExtractResult(subdomain='waiterrant', domain='blogspot', suffix='com')
 ```
 
 The following overrides this.
-
 ```python
->>> extract = tldextract.TLDExtract(include_psl_private_domains=True)
->>> extract.update() # necessary until #66 is fixed
+>>> extract = tldextract.TLDExtract()
+>>> extract('waiterrant.blogspot.com', include_psl_private_domains=True)
+ExtractResult(subdomain='', domain='waiterrant', suffix='blogspot.com')
+```
+
+or to change the default for all extract calls,
+```python
+>>> extract = tldextract.TLDExtract( include_psl_private_domains=True)
 >>> extract('waiterrant.blogspot.com')
 ExtractResult(subdomain='', domain='waiterrant', suffix='blogspot.com')
 ```
@@ -189,18 +192,20 @@ extract = tldextract.TLDExtract(
     suffix_list_urls=["http://foo.bar.baz"],
     # Recommended: Specify your own cache file, to minimize ambiguities about where
     # tldextract is getting its data, or cached data, from.
-    cache_file='/path/to/your/cache/file')
+    cache_dir='/path/to/your/cache/',
+    fallback_to_snapshot=False)
 ```
 
 The above snippet will fetch from the URL *you* specified, upon first need to download the
-suffix list (i.e. if the cache_file doesn't exist).
+suffix list (i.e. if the cached version doesn't exist).
 
 If you want to use input data from your local filesystem, just use the `file://` protocol:
 
 ```python
 extract = tldextract.TLDExtract(
     suffix_list_urls=["file://absolute/path/to/your/local/suffix/list/file"],
-    cache_file='/path/to/your/cache/file')
+    cache_dir='/path/to/your/cache/',
+    fallback_to_snapshot=False)
 ```
 
 Use an absolute path when specifying the `suffix_list_urls` keyword argument.
@@ -228,19 +233,6 @@ of desensitizing users to the nuances of URLs. Who knows how much. But in the
 future, I would consider an overhaul. For example, users could opt into
 validation, either receiving exceptions or error metadata on results.
 
-## Public API
-
-I know it's just one method, but I've needed this functionality in a few
-projects and programming languages, so I've uploaded
-[`tldextract` to App Engine](http://tldextract.appspot.com/). It's there on
-GAE's free pricing plan until Google cuts it off. Just hit it with
-your favorite HTTP client with the URL you want parsed like so:
-
-```zsh
-curl "http://tldextract.appspot.com/api/extract?url=http://www.bbc.co.uk/foo/bar/baz.html"
-# {"domain": "bbc", "subdomain": "www", "suffix": "co.uk"}
-```
-
 ## Contribute
 
 ### Setting up
@@ -249,19 +241,17 @@ curl "http://tldextract.appspot.com/api/extract?url=http://www.bbc.co.uk/foo/bar
 2. Change into the new directory.
 3. `pip install tox`
 
-Alternatively you can install `detox` instead of `tox` to run tests in parallel.
-
 ### Running the Test Suite
 
 Run all tests against all supported Python versions:
 
 ```zsh
-tox
+tox --parallel
 ```
 
 Run all tests against a specific Python environment configuration:
 
 ```zsh
 tox -l
-tox -e py35-requests-2.9.1
+tox -e py37
 ```

@@ -3,6 +3,69 @@
 After upgrading, update your cache file by deleting it or via `tldextract
 --update`.
 
+## 3.0.2 (2020-10-24)
+
+* Bugfixes
+    * Catch permission error when making cache dir, as well as cache file ([#211](https://github.com/john-kurkowski/tldextract/issues/211))
+
+## 3.0.1 (2020-10-21)
+
+* Bugfixes
+    * Fix `tlds` property `AttributeError` ([#210](https://github.com/john-kurkowski/tldextract/issues/210))
+    * Allow `include_psl_private_domains` in global `extract` too ([#210](https://github.com/john-kurkowski/tldextract/issues/210))
+
+## 3.0.0 (2020-10-20)
+
+No changes since 3.0.0.rc1.
+
+## 3.0.0.rc1 (2020-10-12)
+
+This release fixes the long standing bug that public and private suffixes were
+generated separately and could not be switched at runtime,
+[#66](https://github.com/john-kurkowski/tldextract/issues/66).
+
+* Breaking Changes
+    * Rename `cache_file` to `cache_dir` as it is no longer a single file but a directory ([#207](https://github.com/john-kurkowski/tldextract/issues/207))
+    * Rename CLI arg also, from `--cache_file` to `--cache_dir`
+    * Remove Python 2.7 support
+* Features
+    * Can pass `include_psl_private_domains` on call, not only on construction
+    * Use filelocking to support multi-processing and multithreading environments
+* Bugfixes
+    * Select public or private suffixes at runtime ([#66](https://github.com/john-kurkowski/tldextract/issues/66))
+* Removals
+    * Do not `debug` log the diff during update
+
+## 2.2.3 (2020-08-05)
+
+* Bugfixes
+    * Fix concurrent access to cache file when using tldextract in multiple threads ([#146](https://github.com/john-kurkowski/tldextract/pull/146))
+    * Relocate version number, to avoid costly imports ([#187](https://github.com/john-kurkowski/tldextract/pull/187))
+    * Catch `IndexError` caused by upstream punycode bug ([#200](https://github.com/john-kurkowski/tldextract/pull/200))
+    * Drop support for EOL Python 3.4 ([#186](https://github.com/john-kurkowski/tldextract/pull/186))
+    * Explain warning better
+
+## 2.2.2 (2019-10-15)
+
+* Bugfixes
+    * Catch file not found
+    * Use pkgutil instead of pkg_resources ([#163](https://github.com/john-kurkowski/tldextract/pull/163))
+    * Performance: avoid recomputes, a regex, and a partition
+* Misc.
+    * Update LICENSE from GitHub template
+    * Fix warning about literal comparison
+    * Modernize testing ([#177](https://github.com/john-kurkowski/tldextract/issues/177))
+        * Use the latest pylint that works in Python 2
+        * Appease pylint with the new rules
+        * Support Python 3.8-dev
+
+## 2.2.1 (2019-03-05)
+
+* Bugfixes
+    * Ignore case on punycode prefix check ([#133](https://github.com/john-kurkowski/tldextract/issues/133))
+    * Drop support for EOL Python 2.6 ([#152](https://github.com/john-kurkowski/tldextract/issues/152))
+    * Improve sundry doc and README bits
+
 ## 2.2.0 (2017-10-26)
 
 * Features
